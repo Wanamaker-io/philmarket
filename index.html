@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhilMarket — Prediction Markets</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f7f7f5; --surface: #ffffff; --border: #e8e8e4; --border-strong: #d0d0c8;
+      --text: #1a1a18; --text-muted: #6b6b65; --text-faint: #a8a8a0;
+      --yes: #0a8a5c; --yes-bg: #edf7f3; --yes-hover: #076b47;
+      --no: #c94040; --no-bg: #fdf2f2; --no-hover: #a33232; --tag-bg: #f0f0ec;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .nav-logo { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); display: flex; align-items: center; gap: 8px; text-decoration: none; }
+    .nav-logo-dot { width: 8px; height: 8px; background: var(--yes); border-radius: 50%; }
+    main { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+    .breadcrumb { font-size: 13px; color: var(--text-faint); margin-bottom: 24px; display: flex; align-items: center; gap: 6px; }
+    .breadcrumb a { color: var(--text-faint); text-decoration: none; }
+    .market-header { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 28px; }
+    .market-icon { width: 52px; height: 52px; border-radius: 12px; background: linear-gradient(135deg,#e8f5ef,#d0ead9); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; border: 1px solid var(--border); }
+    .market-tags { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .tag { font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: 100px; background: var(--tag-bg); color: var(--text-muted); border: 1px solid var(--border); }
+    .tag.live { background: #edf7f3; color: var(--yes); border-color: #c2e8d8; }
+    .tag.live::before { content:''; display:inline-block; width:6px; height:6px; background:var(--yes); border-radius:50%; margin-right:5px; animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+    .market-title { font-size: 24px; font-weight: 600; line-height: 1.3; letter-spacing: -0.4px; }
+    .market-grid { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
+    @media(max-width:700px){.market-grid{grid-template-columns:1fr}.market-title{font-size:20px}}
+    .stats-row { display:flex; background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:20px; }
+    .stat { flex:1; padding:16px 20px; border-right:1px solid var(--border); }
+    .stat:last-child{border-right:none}
+    .stat-label { font-size:11.5px; font-weight:500; color:var(--text-faint); letter-spacing:0.4px; text-transform:uppercase; margin-bottom:5px; }
+    .stat-value { font-size:20px; font-weight:600; letter-spacing:-0.4px; font-family:'DM Mono',monospace; }
+    .stat-value.yes-color{color:var(--yes)} .stat-value.no-color{color:var(--no)}
+    .prob-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+    .prob-outcome-labels { display:flex; justify-content:space-between; margin-bottom:8px; }
+    .prob-outcome { font-size:13.5px; font-weight:600; }
+    .prob-outcome.yes{color:var(--yes)} .prob-outcome.no{color:var(--no)}
+    .prob-bar-track { height:8px; background:var(--no-bg); border-radius:100px; overflow:hidden; margin-bottom:6px; }
+    .prob-bar-fill { height:100%; background:var(--yes); border-radius:100px; transition:width 0.6s cubic-bezier(.4,0,.2,1); }
+    .chart-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+    .chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .chart-title { font-size:13px; font-weight:500; color:var(--text-muted); }
+    .chart-canvas-wrap { height:140px; position:relative; }
+    canvas#chart{width:100%;height:100%}
+    .about-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .about-title { font-size:13px; font-weight:600; margin-bottom:10px; }
+    .about-text { font-size:14px; line-height:1.65; color:var(--text-muted); }
+    .about-meta { display:flex; flex-direction:column; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+    .about-meta-row { display:flex; justify-content:space-between; font-size:13px; }
+    .about-meta-row span:first-child{color:var(--text-faint)} .about-meta-row span:last-child{font-weight:500}
+    .bet-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; position:sticky; top:72px; }
+    .bet-card-inner{padding:20px}
+    .outcome-toggle { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:20px; }
+    .outcome-btn { font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600; padding:12px; border-radius:10px; border:2px solid var(--border); background:var(--tag-bg); color:var(--text-muted); cursor:pointer; transition:all 0.15s; display:flex; flex-direction:column; align-items:center; gap:2px; }
+    .outcome-btn .pct{font-size:11px;font-weight:400;font-family:'DM Mono',monospace}
+    .outcome-btn.yes-btn:hover,.outcome-btn.yes-btn.active{background:var(--yes-bg);border-color:var(--yes);color:var(--yes)}
+    .outcome-btn.no-btn:hover,.outcome-btn.no-btn.active{background:var(--no-bg);border-color:var(--no);color:var(--no)}
+    .field-wrap{margin-bottom:16px}
+    .bet-input-label{font-size:12px;font-weight:500;color:var(--text-faint);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:8px}
+    .name-input{width:100%;font-family:'DM Sans',sans-serif;font-size:15px;padding:12px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--bg);color:var(--text);outline:none;transition:border-color 0.15s}
+    .name-input:focus{border-color:var(--text)}
+    .name-input::placeholder{color:var(--text-faint)}
+    .bet-input-wrap{position:relative;margin-bottom:16px}
+    .bet-currency{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:600;color:var(--text-muted);pointer-events:none}
+    .bet-input{width:100%;font-family:'DM Mono',monospace;font-size:20px;font-weight:500;padding:14px 14px 14px 30px;border:1px solid var(--border-strong);border-radius:10px;background:var(--bg);color:var(--text);outline:none;transition:border-color 0.15s}
+    .bet-input:focus{border-color:var(--text)}
+    .quick-amounts{display:flex;gap:6px;margin-bottom:20px}
+    .quick-btn{font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:500;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-muted);cursor:pointer;transition:all 0.15s}
+    .quick-btn:hover{background:var(--tag-bg);color:var(--text)}
+    .bet-summary{background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px}
+    .bet-summary-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px}
+    .bet-summary-row:last-child{margin-bottom:0}
+    .bet-summary-row span:first-child{color:var(--text-faint)}
+    .bet-summary-row span:last-child{font-weight:500;font-family:'DM Mono',monospace}
+    .bet-summary-row.highlight span:last-child{color:var(--yes)}
+    .place-bet-btn{width:100%;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;padding:15px;border-radius:10px;border:none;background:var(--text);color:white;cursor:pointer;transition:background 0.15s,transform 0.1s}
+    .place-bet-btn:hover{background:#333}
+    .place-bet-btn:active{transform:scale(0.99)}
+    .place-bet-btn:disabled{opacity:0.5;cursor:not-allowed}
+    .place-bet-btn.yes-active{background:var(--yes)}
+    .place-bet-btn.yes-active:hover{background:var(--yes-hover)}
+    .place-bet-btn.no-active{background:var(--no)}
+    .place-bet-btn.no-active:hover{background:var(--no-hover)}
+    .bet-disclaimer{font-size:11.5px;color:var(--text-faint);text-align:center;margin-top:12px;line-height:1.5}
+    .error-msg{font-size:12px;color:var(--no);margin-top:-10px;margin-bottom:12px;display:none}
+    .error-msg.visible{display:block}
+    .activity-section{border-top:1px solid var(--border);padding:16px 20px}
+    .activity-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .activity-title{font-size:12px;font-weight:600;color:var(--text-faint);letter-spacing:0.4px;text-transform:uppercase}
+    .activity-status{font-size:11.5px;color:var(--text-faint)}
+    .activity-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);animation:fadeIn 0.4s ease}
+    .activity-item:last-child{border-bottom:none}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+    .activity-avatar{width:28px;height:28px;border-radius:50%;background:var(--tag-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;border:1px solid var(--border);color:var(--text-muted)}
+    .activity-detail{flex:1;min-width:0}
+    .activity-name{font-size:12.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .activity-action{font-size:11.5px;color:var(--text-faint)}
+    .activity-badge{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:100px;flex-shrink:0}
+    .activity-badge.yes{background:var(--yes-bg);color:var(--yes)}
+    .activity-badge.no{background:var(--no-bg);color:var(--no)}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s}
+    .modal-overlay.visible{opacity:1;pointer-events:all}
+    .modal{background:var(--surface);border-radius:16px;padding:32px;max-width:380px;width:calc(100% - 48px);text-align:center;transform:scale(0.95);transition:transform 0.2s;border:1px solid var(--border)}
+    .modal-overlay.visible .modal{transform:scale(1)}
+    .modal-emoji{font-size:48px;margin-bottom:16px}
+    .modal-title{font-size:20px;font-weight:600;letter-spacing:-0.3px;margin-bottom:8px}
+    .modal-body{font-size:14.5px;color:var(--text-muted);line-height:1.6;margin-bottom:24px}
+    .modal-detail{background:var(--bg);border-radius:10px;padding:14px;margin-bottom:24px;text-align:left}
+    .modal-detail-row{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px}
+    .modal-detail-row:last-child{margin-bottom:0}
+    .modal-detail-row span:first-child{color:var(--text-faint)}
+    .modal-detail-row span:last-child{font-weight:600}
+    .yes-text{color:var(--yes)} .no-text{color:var(--no)}
+    .modal-close{font-family:'DM Sans',sans-serif;width:100%;padding:13px;font-size:15px;font-weight:600;border-radius:10px;border:none;background:var(--text);color:white;cursor:pointer}
+    .modal-close:hover{background:#333}
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#"><span class="nav-logo-dot"></span>PhilMarket</a>
+  <div style="font-size:13px;color:var(--text-faint)">No real money · Just vibes 🎉</div>
+</nav>
+
+<main>
+  <div class="breadcrumb">
+    <a href="#">Markets</a> <span>›</span>
+    <a href="#">Sports</a> <span>›</span>
+    <span>Phil's Mile Challenge</span>
+  </div>
+
+  <div class="market-header">
+    <div class="market-icon">🏃</div>
+    <div>
+      <div class="market-tags">
+        <span class="tag live">Live</span>
+        <span class="tag">Sports</span>
+        <span class="tag">Athletics</span>
+        <span class="tag">Phil</span>
+      </div>
+      <h1 class="market-title">Will Phil run a sub 6-minute mile on May 31?</h1>
+    </div>
+  </div>
+
+  <div class="market-grid">
+    <!-- LEFT -->
+    <div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-label">Volume</div><div class="stat-value" id="volume">—</div></div>
+        <div class="stat"><div class="stat-label">Yes</div><div class="stat-value yes-color" id="yes-pct">—</div></div>
+        <div class="stat"><div class="stat-label">No</div><div class="stat-value no-color" id="no-pct">—</div></div>
+        <div class="stat"><div class="stat-label">Closes</div><div class="stat-value" style="font-size:14px;padding-top:3px">May 31</div></div>
+      </div>
+
+      <div class="prob-section">
+        <div class="prob-outcome-labels">
+          <div class="prob-outcome yes" id="prob-yes-label">Yes — —</div>
+          <div class="prob-outcome no" id="prob-no-label">No — —</div>
+        </div>
+        <div class="prob-bar-track"><div class="prob-bar-fill" id="prob-bar" style="width:50%"></div></div>
+        <div style="font-size:12px;color:var(--text-faint);margin-top:4px">Implied probability based on all bets placed</div>
+      </div>
+
+      <div class="chart-section">
+        <div class="chart-header">
+          <span class="chart-title">Probability over time (all bets)</span>
+        </div>
+        <div class="chart-canvas-wrap"><canvas id="chart"></canvas></div>
+      </div>
+
+      <div class="about-section">
+        <div class="about-title">About this market</div>
+        <p class="about-text">Resolves <strong>YES</strong> if Phil completes a mile with a recorded time under 6:00 on May 31st. Resolves <strong>NO</strong> if Phil doesn't run, doesn't finish, or clocks 6:00 or slower.</p>
+        <p class="about-text" style="margin-top:10px">No money is collected or distributed. This is a fun prediction market — just bragging rights.</p>
+        <div class="about-meta">
+          <div class="about-meta-row"><span>Resolution date</span><span>May 31, 2025</span></div>
+          <div class="about-meta-row"><span>Resolution source</span><span>Official timing chip</span></div>
+          <div class="about-meta-row"><span>Total bettors</span><span id="total-bettors">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BET CARD -->
+    <div class="bet-card">
+      <div class="bet-card-inner">
+        <div class="outcome-toggle">
+          <button class="outcome-btn yes-btn active" id="yes-btn" onclick="selectOutcome('YES')">Yes<span class="pct" id="yes-btn-pct">—¢</span></button>
+          <button class="outcome-btn no-btn" id="no-btn" onclick="selectOutcome('NO')">No<span class="pct" id="no-btn-pct">—¢</span></button>
+        </div>
+
+        <div class="field-wrap">
+          <div class="bet-input-label">Your name</div>
+          <input class="name-input" id="bettor-name" type="text" placeholder="e.g. sarah_w" maxlength="30" />
+        </div>
+        <div class="error-msg" id="name-error">Please enter your name to place a bet.</div>
+
+        <div class="bet-input-label">Amount</div>
+        <div class="bet-input-wrap">
+          <span class="bet-currency">$</span>
+          <input class="bet-input" id="bet-amount" type="number" min="1" value="20" oninput="updateSummary()" />
+        </div>
+
+        <div class="quick-amounts">
+          <button class="quick-btn" onclick="setAmount(5)">$5</button>
+          <button class="quick-btn" onclick="setAmount(10)">$10</button>
+          <button class="quick-btn" onclick="setAmount(20)">$20</button>
+          <button class="quick-btn" onclick="setAmount(50)">$50</button>
+          <button class="quick-btn" onclick="setAmount(100)">$100</button>
+        </div>
+
+        <div class="bet-summary">
+          <div class="bet-summary-row"><span>Outcome</span><span id="summary-outcome">YES</span></div>
+          <div class="bet-summary-row"><span>Avg price</span><span id="summary-price">—</span></div>
+          <div class="bet-summary-row"><span>Shares</span><span id="summary-shares">—</span></div>
+          <div class="bet-summary-row highlight"><span>Potential payout</span><span id="summary-payout">—</span></div>
+        </div>
+
+        <button class="place-bet-btn yes-active" id="place-btn" onclick="placeBet()">Buy YES</button>
+        <p class="bet-disclaimer">No real money involved. For fun only 🎉</p>
+      </div>
+
+      <div class="activity-section">
+        <div class="activity-header">
+          <span class="activity-title">Recent Bets</span>
+          <span class="activity-status" id="feed-status">Loading…</span>
+        </div>
+        <div id="activity-feed"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-emoji" id="modal-emoji">🎯</div>
+    <div class="modal-title" id="modal-title">Bet placed!</div>
+    <div class="modal-body">Your prediction has been saved. No real money — just bragging rights.</div>
+    <div class="modal-detail">
+      <div class="modal-detail-row"><span>Name</span><span id="modal-name">—</span></div>
+      <div class="modal-detail-row"><span>Outcome</span><span id="modal-outcome" class="yes-text">YES</span></div>
+      <div class="modal-detail-row"><span>Amount</span><span id="modal-amount">—</span></div>
+      <div class="modal-detail-row"><span>Potential payout</span><span id="modal-payout">—</span></div>
+    </div>
+    <button class="modal-close" onclick="closeModal()">Done</button>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://lwymncdfuknzbihntgbo.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_egK-_n-wfYAKsdyP0edS2w_S5rvT6OH';
+
+  async function sbFetch(path, opts = {}) {
+    const res = await fetch(SUPABASE_URL + path, {
+      ...opts,
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': opts.prefer || '',
+        ...(opts.headers || {})
+      }
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text);
+    return text ? JSON.parse(text) : null;
+  }
+
+  let selectedOutcome = 'YES';
+  let allBets = [];
+  let yesVolume = 0, noVolume = 0;
+  let chartHistory = [];
+
+  function getYesProb() {
+    const t = yesVolume + noVolume;
+    return t === 0 ? 50 : Math.round((yesVolume / t) * 100);
+  }
+
+  async function loadBets() {
+    try {
+      const bets = await sbFetch('/rest/v1/bets?select=*&order=created_at.desc&limit=500');
+      allBets = bets || [];
+      yesVolume = 0; noVolume = 0;
+      allBets.forEach(b => {
+        if (b.outcome === 'YES') yesVolume += b.amount;
+        else noVolume += b.amount;
+      });
+
+      // build chart from oldest→newest
+      const sorted = [...allBets].reverse();
+      chartHistory = [];
+      let ry = 0, rn = 0;
+      sorted.forEach(b => {
+        if (b.outcome === 'YES') ry += b.amount; else rn += b.amount;
+        const t = ry + rn;
+        chartHistory.push(t > 0 ? Math.round((ry/t)*100) : 50);
+      });
+      if (!chartHistory.length) chartHistory = [50];
+
+      refreshStats();
+      renderFeed(allBets.slice(0, 7));
+      drawChart(chartHistory);
+      document.getElementById('feed-status').textContent = '';
+    } catch(e) {
+      document.getElementById('feed-status').textContent = 'Could not load bets';
+      console.error(e);
+    }
+  }
+
+  function refreshStats() {
+    const yp = getYesProb(), np = 100 - yp;
+    const total = yesVolume + noVolume;
+    document.getElementById('yes-pct').textContent = yp + '%';
+    document.getElementById('no-pct').textContent = np + '%';
+    document.getElementById('volume').textContent = '$' + total.toLocaleString();
+    document.getElementById('total-bettors').textContent = allBets.length;
+    document.getElementById('prob-bar').style.width = yp + '%';
+    document.getElementById('prob-yes-label').textContent = 'Yes — ' + yp + '%';
+    document.getElementById('prob-no-label').textContent = 'No — ' + np + '%';
+    document.getElementById('yes-btn-pct').textContent = yp + '¢';
+    document.getElementById('no-btn-pct').textContent = np + '¢';
+    updateSummary();
+  }
+
+  function selectOutcome(o) {
+    selectedOutcome = o;
+    document.getElementById('yes-btn').classList.toggle('active', o === 'YES');
+    document.getElementById('no-btn').classList.toggle('active', o === 'NO');
+    const btn = document.getElementById('place-btn');
+    btn.className = 'place-bet-btn ' + (o === 'YES' ? 'yes-active' : 'no-active');
+    btn.textContent = 'Buy ' + o;
+    updateSummary();
+  }
+
+  function setAmount(n) { document.getElementById('bet-amount').value = n; updateSummary(); }
+
+  function updateSummary() {
+    const amount = parseFloat(document.getElementById('bet-amount').value) || 0;
+    const yp = getYesProb();
+    const prob = selectedOutcome === 'YES' ? yp/100 : (100-yp)/100;
+    document.getElementById('summary-outcome').textContent = selectedOutcome;
+    document.getElementById('summary-price').textContent = Math.round(prob*100) + '¢';
+    document.getElementById('summary-shares').textContent = prob > 0 ? (amount/prob).toFixed(1) : '—';
+    document.getElementById('summary-payout').textContent = prob > 0 ? '$' + (amount/prob).toFixed(2) : '—';
+  }
+
+  async function placeBet() {
+    const name = document.getElementById('bettor-name').value.trim();
+    const amount = parseInt(document.getElementById('bet-amount').value) || 0;
+    const nameErr = document.getElementById('name-error');
+    if (!name) { nameErr.classList.add('visible'); return; }
+    nameErr.classList.remove('visible');
+    if (amount <= 0) return;
+
+    const btn = document.getElementById('place-btn');
+    btn.disabled = true; btn.textContent = 'Placing…';
+
+    try {
+      await sbFetch('/rest/v1/bets', {
+        method: 'POST', prefer: 'return=minimal',
+        body: JSON.stringify({ name, outcome: selectedOutcome, amount })
+      });
+
+      // optimistic update
+      const newBet = { name, outcome: selectedOutcome, amount, created_at: new Date().toISOString() };
+      allBets.unshift(newBet);
+      if (selectedOutcome === 'YES') yesVolume += amount; else noVolume += amount;
+      chartHistory.push(getYesProb());
+
+      refreshStats();
+      renderFeed(allBets.slice(0, 7));
+      drawChart(chartHistory);
+
+      const yp = getYesProb();
+      const prob = selectedOutcome === 'YES' ? yp/100 : (100-yp)/100;
+      const payout = (amount/prob).toFixed(2);
+      document.getElementById('modal-emoji').textContent = selectedOutcome === 'YES' ? '🏃' : '💺';
+      document.getElementById('modal-title').textContent = selectedOutcome === 'YES' ? 'Go Phil! 🏃' : 'Skeptic mode on 😤';
+      document.getElementById('modal-name').textContent = name;
+      document.getElementById('modal-outcome').textContent = selectedOutcome;
+      document.getElementById('modal-outcome').className = selectedOutcome === 'YES' ? 'yes-text' : 'no-text';
+      document.getElementById('modal-amount').textContent = '$' + amount;
+      document.getElementById('modal-payout').textContent = '$' + payout;
+      document.getElementById('modal').classList.add('visible');
+    } catch(e) {
+      alert('Error saving bet: ' + e.message + '\n\nMake sure you ran the SQL setup in Supabase.');
+      console.error(e);
+    }
+
+    btn.disabled = false;
+    selectOutcome(selectedOutcome);
+  }
+
+  function closeModal() { document.getElementById('modal').classList.remove('visible'); }
+  document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+  function timeAgo(d) {
+    const s = Math.floor((Date.now() - new Date(d))/1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    return Math.floor(s/86400) + 'd ago';
+  }
+
+  function renderFeed(bets) {
+    const el = document.getElementById('activity-feed');
+    if (!bets.length) {
+      el.innerHTML = '<div style="font-size:13px;color:var(--text-faint);padding:8px 0">No bets yet — be the first!</div>';
+      return;
+    }
+    el.innerHTML = bets.map(b => `
+      <div class="activity-item">
+        <div class="activity-avatar">${b.name.slice(0,2).toUpperCase()}</div>
+        <div class="activity-detail">
+          <div class="activity-name">${b.name}</div>
+          <div class="activity-action">$${b.amount} · ${timeAgo(b.created_at)}</div>
+        </div>
+        <span class="activity-badge ${b.outcome.toLowerCase()}">${b.outcome}</span>
+      </div>`).join('');
+  }
+
+  function drawChart(points) {
+    const canvas = document.getElementById('chart');
+    const wrap = canvas.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = wrap.offsetWidth * dpr;
+    canvas.height = wrap.offsetHeight * dpr;
+    canvas.style.width = wrap.offsetWidth + 'px';
+    canvas.style.height = wrap.offsetHeight + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = wrap.offsetWidth, H = wrap.offsetHeight;
+    const pad = {top:12,right:16,bottom:28,left:36};
+    const cW = W-pad.left-pad.right, cH = H-pad.top-pad.bottom;
+    ctx.clearRect(0,0,W,H);
+    [0,25,50,75,100].forEach(v => {
+      const y = pad.top + cH*(1-v/100);
+      ctx.strokeStyle='#e8e8e4'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(W-pad.right,y); ctx.stroke();
+      ctx.fillStyle='#a8a8a0'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='right';
+      ctx.fillText(v+'%', pad.left-4, y+3.5);
+    });
+    if (points.length < 2) {
+      const y = pad.top+cH*(1-(points[0]||50)/100);
+      ctx.strokeStyle='#0a8a5c'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(W-pad.right,y); ctx.stroke();
+      return;
+    }
+    const pts = points.map((v,i) => ({
+      x: pad.left+(i/(points.length-1))*cW,
+      y: pad.top+cH*(1-v/100)
+    }));
+    const grad = ctx.createLinearGradient(0,pad.top,0,H-pad.bottom);
+    grad.addColorStop(0,'rgba(10,138,92,0.18)');
+    grad.addColorStop(1,'rgba(10,138,92,0)');
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, H-pad.bottom);
+    pts.forEach(p => ctx.lineTo(p.x,p.y));
+    ctx.lineTo(pts[pts.length-1].x, H-pad.bottom);
+    ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+    ctx.beginPath();
+    pts.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+    ctx.strokeStyle='#0a8a5c'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+    const last = pts[pts.length-1];
+    ctx.beginPath(); ctx.arc(last.x,last.y,4,0,Math.PI*2);
+    ctx.fillStyle='#0a8a5c'; ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+  }
+
+  loadBets();
+  setInterval(loadBets, 15000);
+  window.addEventListener('resize', () => drawChart(chartHistory));
+</script>
+</body>
+</html>
